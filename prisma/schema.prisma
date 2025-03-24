@@ -1,0 +1,225 @@
+// This is your Prisma schema file for Bizcotap Backend Migration
+// Enhanced with compliance-related fields
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User roles enum
+enum UserRole {
+  SUPER_ADMIN
+  COMPANY_ADMIN
+  INDIVIDUAL
+  EMPLOYEE
+}
+
+// Order status enum
+enum OrderStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+// User model with enhanced compliance fields
+model User {
+  id                 Int                @id @default(autoincrement())
+  email              String             @unique
+  password           String?            // Nullable to support OAuth users
+  firstName          String
+  lastName           String
+  phone              String?
+  role               UserRole           @default(INDIVIDUAL)
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // OAuth related fields
+  googleId           String?            @unique
+  appleId            String?            @unique
+  linkedinId         String?            @unique
+
+  // GDPR Compliance fields
+  dataConsentVersion String?
+  dataConsentDate    DateTime?
+  marketingConsent   Boolean            @default(false)
+  marketingConsentDate DateTime?
+  lastPrivacyNoticeView DateTime?
+  dataRetentionDate  DateTime?          // When to automatically delete/anonymize data
+
+  // Security compliance fields (SOC2, PCI-DSS)
+  passwordLastChanged DateTime?
+  failedLoginAttempts Int               @default(0)
+  lastFailedLogin    DateTime?
+  accountLocked      Boolean            @default(false)
+  accountLockedUntil DateTime?
+  mfaEnabled         Boolean            @default(false)
+  mfaSecret          String?
+
+  // Relations
+  company            Company?           @relation(fields: [companyId], references: [id])
+  companyId          Int?
+  ownedCompanies     Company[]          @relation("CompanyOwner")
+  userTags           UserTag[]
+  tagOrders          TagOrder[]
+  exchangedInfos     ExchangedInfo[]
+  sentExchanges      ExchangedInfo[]    @relation("SentExchanges")
+  userSessions       UserSession[]
+
+  @@index([email])
+  @@index([role])
+}
+
+// Sessions model for authentication tracking (SOC2)
+model UserSession {
+  id                 String             @id @default(uuid())
+  userId             Int
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress          String?
+  userAgent          String?
+  createdAt          DateTime           @default(now())
+  expiresAt          DateTime
+  isRevoked          Boolean            @default(false)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+// Company model for business accounts
+model Company {
+  id                 Int                @id @default(autoincrement())
+  name               String
+  logo               String?
+  website            String?
+  industry           String?
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  
+  // Compliance fields
+  dataProcessingAgreement Boolean       @default(false)
+  dataProcessingDate     DateTime?
+
+  // Relations
+  owner              User               @relation("CompanyOwner", fields: [ownerId], references: [id])
+  ownerId            Int
+  employees          User[]
+  userTags           UserTag[]
+  tagOrders          TagOrder[]
+
+  @@index([ownerId])
+}
+
+// Tag orders for approval workflow
+model TagOrder {
+  id                 Int                @id @default(autoincrement())
+  requestData        Json               // Store request details as JSON
+  status             OrderStatus        @default(PENDING)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // Relations
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             Int
+  company            Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId          Int?
+  resultingTag       UserTag?           @relation("OrderToTag")
+
+  @@index([userId])
+  @@index([status])
+}
+
+// Active user tags (approved and activated)
+model UserTag {
+  id                 Int                @id @default(autoincrement())
+  tuid               String             @unique // The UUID for NFC tag functionality
+  tagInfo            Json               // Store tag configuration as JSON
+  isActive           Boolean            @default(true)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  // Compliance fields
+  privacyPolicyAccepted Boolean         @default(false)
+  privacyPolicyVersion  String?
+  privacyAcceptedDate   DateTime?
+
+  // Relations
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             Int
+  company            Company?           @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  companyId          Int?
+  originatingOrder   TagOrder?          @relation("OrderToTag", fields: [tagOrderId], references: [id])
+  tagOrderId         Int?               @unique
+  exchangedInfos     ExchangedInfo[]
+
+  @@index([tuid])
+  @@index([userId])
+}
+
+// Exchanged contact information (lead capture)
+model ExchangedInfo {
+  id                 Int                @id @default(autoincrement())
+  names              String
+  email              String
+  phoneNumber        String
+  longitude          Float?
+  latitude           Float?
+  additionalInfo     Json?              // Additional data captured
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+  
+  // GDPR compliance fields
+  consentGiven       Boolean            @default(false)
+  consentTimestamp   DateTime?
+  consentIpAddress   String?
+  expiryDate         DateTime?          // When to automatically delete this data
+  
+  // Relations
+  userTag            UserTag            @relation(fields: [userTagId], references: [id], onDelete: Cascade)
+  userTagId          Int
+  user               User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId             Int
+  sender             User?              @relation("SentExchanges", fields: [senderId], references: [id], onDelete: SetNull)
+  senderId           Int?
+
+  @@index([userTagId])
+  @@index([userId])
+  @@index([email])
+  @@index([expiryDate])
+}
+
+// Enhanced audit logs for compliance (SOC2, GDPR)
+model AuditLog {
+  id                 Int                @id @default(autoincrement())
+  action             String             // What was done
+  entityType         String             // What type of entity was affected
+  entityId           String             // ID of the affected entity
+  userId             Int?               // Who performed the action
+  metadata           Json?              // Additional context
+  ipAddress          String?
+  userAgent          String?
+  createdAt          DateTime           @default(now())
+  severity           String?            // For security events (INFO, WARNING, ERROR)
+  eventCategory      String?            // Authentication, Data Access, System, etc.
+
+  @@index([entityType, entityId])
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([eventCategory])
+}
+
+// Data processing consent records (GDPR)
+model DataConsent {
+  id                 Int                @id @default(autoincrement())
+  consentType        String             // "marketing", "data_processing", etc.
+  version            String             // Version of the consent document
+  ipAddress          String?
+  userAgent          String?
+  createdAt          DateTime           @default(now())
+  
+  @@index([consentType, version])
+}
