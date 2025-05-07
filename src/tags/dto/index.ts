@@ -1,4 +1,12 @@
-import { IsNotEmpty, IsString, IsOptional, IsObject, IsBoolean, IsNumber, IsEnum } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsOptional,
+  IsObject,
+  IsBoolean,
+  IsNumber,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
 
@@ -13,7 +21,11 @@ export class CreateTagDto {
   @IsOptional()
   companyId?: number;
 
-  @ApiProperty({ description: 'Tag information (stored as JSON)', type: 'object', additionalProperties: true })
+  @ApiProperty({
+    description: 'Tag information (stored as JSON)',
+    type: 'object',
+    additionalProperties: true,
+  })
   @IsObject()
   @IsNotEmpty()
   tagInfo: Record<string, any>;
@@ -27,7 +39,11 @@ export class UpdateTagDto extends PartialType(CreateTagDto) {
 }
 
 export class CreateTagOrderDto {
-  @ApiProperty({ description: 'Request data for the tag order (stored as JSON)', type: 'object', additionalProperties: true })
+  @ApiProperty({
+    description: 'Request data for the tag order (stored as JSON)',
+    type: 'object',
+    additionalProperties: true,
+  })
   @IsObject()
   @IsNotEmpty()
   requestData: Record<string, any>;
@@ -52,7 +68,11 @@ export class TagResponseDto {
   @ApiProperty({ example: 'abc123-def456' })
   tuid: string;
 
-  @ApiProperty({ example: { socialLinks: [], displayName: 'John Doe' }, type: 'object', additionalProperties: true })
+  @ApiProperty({
+    example: { socialLinks: [], displayName: 'John Doe' },
+    type: 'object',
+    additionalProperties: true,
+  })
   tagInfo: Record<string, any>;
 
   @ApiProperty({ example: true })
@@ -75,7 +95,11 @@ export class TagOrderResponseDto {
   @ApiProperty({ example: 1 })
   id: number;
 
-  @ApiProperty({ example: { socialLinks: [], displayName: 'John Doe' }, type: 'object', additionalProperties: true })
+  @ApiProperty({
+    example: { socialLinks: [], displayName: 'John Doe' },
+    type: 'object',
+    additionalProperties: true,
+  })
   requestData: Record<string, any>;
 
   @ApiProperty({ enum: OrderStatus, example: OrderStatus.PENDING })

@@ -1,8 +1,18 @@
-import { IsNotEmpty, IsString, IsEmail, IsOptional, IsNumber, IsObject } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsString,
+  IsEmail,
+  IsOptional,
+  IsNumber,
+  IsObject,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class CreateExchangeDto {
-  @ApiProperty({ description: 'Tag TUID that was scanned', example: 'abc123-def456' })
+  @ApiProperty({
+    description: 'Tag TUID that was scanned',
+    example: 'abc123-def456',
+  })
   @IsString()
   @IsNotEmpty()
   tagTuid: string;
@@ -12,7 +22,10 @@ export class CreateExchangeDto {
   @IsNotEmpty()
   names: string;
 
-  @ApiProperty({ description: 'Email address', example: 'john.doe@example.com' })
+  @ApiProperty({
+    description: 'Email address',
+    example: 'john.doe@example.com',
+  })
   @IsEmail()
   @IsNotEmpty()
   email: string;
@@ -22,17 +35,29 @@ export class CreateExchangeDto {
   @IsNotEmpty()
   phoneNumber: string;
 
-  @ApiProperty({ description: 'Longitude of the exchange location', required: false, example: 42.12345 })
+  @ApiProperty({
+    description: 'Longitude of the exchange location',
+    required: false,
+    example: 42.12345,
+  })
   @IsNumber()
   @IsOptional()
   longitude?: number;
 
-  @ApiProperty({ description: 'Latitude of the exchange location', required: false, example: -71.12345 })
+  @ApiProperty({
+    description: 'Latitude of the exchange location',
+    required: false,
+    example: -71.12345,
+  })
   @IsNumber()
   @IsOptional()
   latitude?: number;
 
-  @ApiProperty({ description: 'Additional information', required: false, type: Object })
+  @ApiProperty({
+    description: 'Additional information',
+    required: false,
+    type: Object,
+  })
   @IsObject()
   @IsOptional()
   additionalInfo?: Record<string, any>;
@@ -57,7 +82,10 @@ export class ExchangeResponseDto {
   @ApiProperty({ example: -71.12345, required: false })
   latitude?: number;
 
-  @ApiProperty({ example: { linkedIn: 'https://linkedin.com/in/johndoe' }, required: false })
+  @ApiProperty({
+    example: { linkedIn: 'https://linkedin.com/in/johndoe' },
+    required: false,
+  })
   additionalInfo?: Record<string, any>;
 
   @ApiProperty({ example: 1 })

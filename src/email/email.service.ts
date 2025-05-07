@@ -31,7 +31,9 @@ export class EmailService {
       });
       this.logger.log(`Tag created email sent to ${email}`);
     } catch (error) {
-      this.logger.error(`Failed to send tag created email to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send tag created email to ${email}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -61,7 +63,9 @@ export class EmailService {
       });
       this.logger.log(`Tag order notification email sent to ${email}`);
     } catch (error) {
-      this.logger.error(`Failed to send tag order notification email to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send tag order notification email to ${email}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -89,7 +93,9 @@ export class EmailService {
       });
       this.logger.log(`Tag approved email sent to ${email}`);
     } catch (error) {
-      this.logger.error(`Failed to send tag approved email to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send tag approved email to ${email}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -111,7 +117,9 @@ export class EmailService {
       });
       this.logger.log(`Tag rejected email sent to ${email}`);
     } catch (error) {
-      this.logger.error(`Failed to send tag rejected email to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send tag rejected email to ${email}: ${error.message}`,
+      );
       throw error;
     }
   }
@@ -133,7 +141,9 @@ export class EmailService {
       });
       this.logger.log(`Password reset email sent to ${email}`);
     } catch (error) {
-      this.logger.error(`Failed to send password reset email to ${email}: ${error.message}`);
+      this.logger.error(
+        `Failed to send password reset email to ${email}: ${error.message}`,
+      );
       throw error;
     }
   }

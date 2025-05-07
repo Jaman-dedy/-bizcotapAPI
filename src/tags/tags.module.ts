@@ -1,11 +1,13 @@
+// src/tags/tags.module.ts
 import { Module } from '@nestjs/common';
-import { EmailModule } from 'src/email/email.module';
 import { TagsService } from './tags.service';
 import { TagsController } from './tags.controller';
 import { TagOrdersController } from './tag-orders.controller';
+import { EmailModule } from '../email/email.module';
+import { PrismaModule } from 'prisma/prisma.module';
 
 @Module({
-  imports: [EmailModule],
+  imports: [PrismaModule, EmailModule],
   controllers: [TagsController, TagOrdersController],
   providers: [TagsService],
   exports: [TagsService],

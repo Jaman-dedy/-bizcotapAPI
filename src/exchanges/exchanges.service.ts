@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { CreateExchangeDto } from './dto';
 import { ExchangedInfo } from '@prisma/client';
 import { ExchangeQueryDto } from './dto';
@@ -8,18 +12,25 @@ import { PrismaService } from 'prisma/prisma.service';
 export class ExchangesService {
   constructor(private prisma: PrismaService) {}
 
-  async createExchange(createExchangeDto: CreateExchangeDto, userId?: number): Promise<ExchangedInfo> {
+  async createExchange(
+    createExchangeDto: CreateExchangeDto,
+    userId?: number,
+  ): Promise<ExchangedInfo> {
     // Find the tag by TUID
     const tag = await this.prisma.userTag.findUnique({
       where: { tuid: createExchangeDto.tagTuid },
     });
 
     if (!tag) {
-      throw new NotFoundException(`Tag with TUID ${createExchangeDto.tagTuid} not found`);
+      throw new NotFoundException(
+        `Tag with TUID ${createExchangeDto.tagTuid} not found`,
+      );
     }
 
     if (!tag.isActive) {
-      throw new BadRequestException(`Tag with TUID ${createExchangeDto.tagTuid} is not active`);
+      throw new BadRequestException(
+        `Tag with TUID ${createExchangeDto.tagTuid} is not active`,
+      );
     }
 
     // Create the exchange record
@@ -38,7 +49,10 @@ export class ExchangesService {
     });
   }
 
-  async findAllExchanges(userId: number, query: ExchangeQueryDto): Promise<ExchangedInfo[]> {
+  async findAllExchanges(
+    userId: number,
+    query: ExchangeQueryDto,
+  ): Promise<ExchangedInfo[]> {
     // Build the query
     const where: any = { userId };
 
@@ -99,7 +113,9 @@ export class ExchangesService {
 
     // Check if the user has permission to view this exchange
     if (exchange.userId !== userId) {
-      throw new BadRequestException('You do not have permission to view this exchange');
+      throw new BadRequestException(
+        'You do not have permission to view this exchange',
+      );
     }
 
     return exchange;
@@ -148,7 +164,7 @@ export class ExchangesService {
     const tagDetails = await this.prisma.userTag.findMany({
       where: {
         id: {
-          in: tagStats.map(stat => stat.userTagId),
+          in: tagStats.map((stat) => stat.userTagId),
         },
       },
       select: {
@@ -159,8 +175,8 @@ export class ExchangesService {
     });
 
     // Map tag details to stats
-    const tagStatsWithDetails = tagStats.map(stat => {
-      const tag = tagDetails.find(t => t.id === stat.userTagId);
+    const tagStatsWithDetails = tagStats.map((stat) => {
+      const tag = tagDetails.find((t) => t.id === stat.userTagId);
       return {
         userTagId: stat.userTagId,
         tuid: tag?.tuid,

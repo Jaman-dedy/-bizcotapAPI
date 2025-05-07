@@ -1,20 +1,55 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { CreateCompanyDto, UpdateCompanyDto, AddEmployeeDto } from './dto';
 import { Company, UserRole } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 
 @Injectable()
 export class CompaniesService {
+  // Predefined list of industries for dropdown
+  private readonly industries = [
+    'Technology',
+    'Healthcare',
+    'Finance',
+    'Education',
+    'Retail',
+    'Manufacturing',
+    'Entertainment',
+    'Construction',
+    'Food & Beverage',
+    'Consulting',
+    'Transportation',
+    'Energy',
+    'Agriculture',
+    'Real Estate',
+    'Telecommunications',
+    'Media',
+    'Hospitality',
+    'Legal',
+    'Insurance',
+    'Other'
+  ];
+  
   constructor(private prisma: PrismaService) {}
 
-  async create(createCompanyDto: CreateCompanyDto): Promise<Company> {
+  async create(createCompanyDto: CreateCompanyDto): Promise<any> {
     // Verify owner exists
     const owner = await this.prisma.user.findUnique({
       where: { id: createCompanyDto.ownerId },
     });
 
     if (!owner) {
-      throw new NotFoundException(`User with ID ${createCompanyDto.ownerId} not found`);
+      throw new NotFoundException(
+        `User with ID ${createCompanyDto.ownerId} not found`,
+      );
+    }
+
+    // Validate industry if provided
+    if (createCompanyDto.industry && !this.industries.includes(createCompanyDto.industry)) {
+      throw new ConflictException(`Industry "${createCompanyDto.industry}" is not valid`);
     }
 
     // Create the company
@@ -25,6 +60,13 @@ export class CompaniesService {
         website: createCompanyDto.website,
         industry: createCompanyDto.industry,
         ownerId: createCompanyDto.ownerId,
+      },
+      include: {
+        employees: {
+          select: {
+            id: true,
+          },
+        },
       },
     });
 
@@ -39,7 +81,7 @@ export class CompaniesService {
     return company;
   }
 
-  async findAll(): Promise<Company[]> {
+  async findAll(): Promise<any[]> {
     return this.prisma.company.findMany({
       include: {
         owner: {
@@ -63,7 +105,7 @@ export class CompaniesService {
     });
   }
 
-  async findOne(id: number): Promise<Company> {
+  async findOne(id: number): Promise<any> {
     const company = await this.prisma.company.findUnique({
       where: { id },
       include: {
@@ -94,27 +136,67 @@ export class CompaniesService {
     return company;
   }
 
-  async update(id: number, updateCompanyDto: UpdateCompanyDto): Promise<Company> {
+  async update(
+    id: number,
+    updateCompanyDto: UpdateCompanyDto,
+  ): Promise<any> {
     // Verify company exists
     await this.findOne(id);
 
-    return this.prisma.company.update({
+    // Validate industry if provided
+    if (updateCompanyDto.industry && !this.industries.includes(updateCompanyDto.industry)) {
+      throw new ConflictException(`Industry "${updateCompanyDto.industry}" is not valid`);
+    }
+
+    // Update company
+    const updatedCompany = await this.prisma.company.update({
       where: { id },
       data: updateCompanyDto,
+      include: {
+        owner: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        employees: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+      },
     });
+
+    return updatedCompany;
   }
 
-  async remove(id: number): Promise<Company> {
+  async remove(id: number): Promise<any> {
     // Verify company exists
     await this.findOne(id);
 
     // Remove company
     return this.prisma.company.delete({
       where: { id },
+      include: {
+        employees: {
+          select: {
+            id: true,
+          },
+        },
+      },
     });
   }
 
-  async addEmployees(id: number, addEmployeeDto: AddEmployeeDto): Promise<Company> {
+  async addEmployees(
+    id: number,
+    addEmployeeDto: AddEmployeeDto,
+  ): Promise<any> {
     // Verify company exists
     const company = await this.findOne(id);
 
@@ -142,7 +224,9 @@ export class CompaniesService {
         if (error instanceof NotFoundException) {
           throw error;
         }
-        throw new ConflictException(`Failed to add user with ID ${userId} to company`);
+        throw new ConflictException(
+          `Failed to add user with ID ${userId} to company`,
+        );
       }
     }
 
@@ -163,7 +247,9 @@ export class CompaniesService {
     });
 
     if (!user) {
-      throw new NotFoundException(`User with ID ${userId} is not an employee of this company`);
+      throw new NotFoundException(
+        `User with ID ${userId} is not an employee of this company`,
+      );
     }
 
     // Remove user from company
@@ -173,6 +259,34 @@ export class CompaniesService {
         companyId: null,
         role: UserRole.INDIVIDUAL,
       },
+    });
+  }
+  
+  // Get list of available industries for dropdown
+  async getIndustries(): Promise<string[]> {
+    return this.industries;
+  }
+
+  // Get list of potential company owners for dropdown
+  async getPotentialOwners() {
+    return this.prisma.user.findMany({
+      where: {
+        OR: [
+          { role: UserRole.SUPER_ADMIN },
+          { role: UserRole.COMPANY_ADMIN },
+          { role: UserRole.INDIVIDUAL }
+        ]
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true
+      },
+      orderBy: {
+        lastName: 'asc'
+      }
     });
   }
 }

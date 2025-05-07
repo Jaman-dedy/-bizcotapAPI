@@ -1,12 +1,9 @@
 import { Injectable, OnModuleInit, OnModuleDestroy, Logger, INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
-  enableShutdownHooks(app: INestApplication<any>) {
-    throw new Error('Method not implemented.');
-  }
   private readonly logger = new Logger(PrismaService.name);
 
   constructor(private configService: ConfigService) {
@@ -16,16 +13,40 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
           url: configService.get('DATABASE_URL'),
         },
       },
+      // Optional: Add log levels for debugging
+      log: [
+        { level: 'query', emit: 'event' },
+        { level: 'error', emit: 'stdout' },
+        { level: 'info', emit: 'stdout' },
+        { level: 'warn', emit: 'stdout' },
+      ],
     });
   }
 
   async onModuleInit() {
-    await this.$connect();
-    this.logger.log('Connected to PostgreSQL database');
+    try {
+      await this.$connect();
+      this.logger.log('Connected to PostgreSQL database');
+    } catch (error) {
+      this.logger.error('Failed to connect to database', error);
+      throw error;
+    }
   }
 
   async onModuleDestroy() {
-    await this.$disconnect();
-    this.logger.log('Disconnected from PostgreSQL database');
+    try {
+      await this.$disconnect();
+      this.logger.log('Disconnected from PostgreSQL database');
+    } catch (error) {
+      this.logger.error('Failed to disconnect from database', error);
+    }
+  }
+
+  async enableShutdownHooks(app: INestApplication) {
+    // Instead of using $on('beforeExit'), use process.on('beforeExit')
+    process.on('beforeExit', async () => {
+      this.logger.log('Shutting down application');
+      await app.close();
+    });
   }
 }

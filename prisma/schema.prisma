@@ -157,6 +157,9 @@ model UserTag {
 
   @@index([tuid])
   @@index([userId])
+  
+  views     TagView[]
+  actions   TagAction[]
 }
 
 // Exchanged contact information (lead capture)
@@ -222,4 +225,41 @@ model DataConsent {
   createdAt          DateTime           @default(now())
   
   @@index([consentType, version])
+}
+
+model TagView {
+  id        Int      @id @default(autoincrement())
+  tagId     Int
+  tuid      String   // For easier querying without joins
+  viewerIp  String?  // Hashed for privacy
+  location  String?  // JSON string with country, region, city
+  userAgent String?  // Browser/device info
+  referer   String?  // Where the view came from
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tag       UserTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([tagId])
+  @@index([createdAt])
+  @@index([tuid])
+}
+
+model TagAction {
+  id        Int      @id @default(autoincrement())
+  tagId     Int
+  tuid      String   // For easier querying without joins
+  action    String   // Type of action (e.g., "phone_call", "email", "website_visit", "download_vcf")
+  viewerIp  String?  // Hashed for privacy
+  location  String?  // JSON string with country, region, city
+  userAgent String?  // Browser/device info
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tag       UserTag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@index([tagId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([tuid])
 }

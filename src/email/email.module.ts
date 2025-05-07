@@ -5,7 +5,6 @@ import { HandlebarsAdapter } from '@nestjs-modules/mailer/dist/adapters/handleba
 import { join } from 'path';
 import { EmailService } from './email.service';
 
-
 @Module({
   imports: [
     MailerModule.forRootAsync({

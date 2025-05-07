@@ -1,0 +1,24 @@
+[
+    {
+      "id": "2",
+      "company_id": null,
+      "user_id": "421",
+      "tag_info": "{\"dob\": \"1996-06-24T21:00:00.000Z\", \"mine\": 1, \"fname\": \"Patrick\", \"lname\": \"K. SHEMA\", \"notes\": \"Forward-thinking Software Engineer with a background working effectively in dynamic environments. A proud team player focused on achieving project objectives with accuracy. I am also a fast learner and highly adaptable.\", \"title\": \"Mr\", \"avatar\": \"https://api.bizcotap.com/uploads/userProfile/a5ca2b182454e180ea304116ecca8789.png\", \"emails\": [{\"type\": \"WORK\", \"value\": \"shemap300@gmail.com\"}, {\"type\": \"WORK\", \"value\": \"ps@shemaconsulting.com\"}], \"phones\": [{\"type\": \"WORK\", \"value\": \"+250 786 842 192\"}], \"company\": \"SHEMA CONSULTING LTD\", \"position\": \"Founder & CEO\", \"websites\": [{\"type\": \"WORK\", \"value\": \"https://www.linkedin.com/in/PatrickSK/\"}], \"addresses\": [{\"type\": \"WORK\", \"value\": \"44 KG 548 St, Kigali\"}, {\"type\": \"WORK\", \"value\": \"23VW+VJC, Kigali\"}]}",
+      "created_at": "2022-06-22 22:06:37",
+      "updated_at": "2023-03-06 11:45:49",
+      "tuid": "46869480662b3926dbe3cf",
+      "security_enabled": "0",
+      "pin_code": null
+    },
+    {
+      "id": "5",
+      "company_id": null,
+      "user_id": "9",
+      "tag_info": "{\"dob\": null, \"fname\": \"Alice\", \"lname\": \"Kayibanda\", \"notes\": null, \"title\": \"Ms\", \"avatar\": null, \"emails\": [{\"type\": \"WORK\", \"value\": \"alice.kayibanda@undp.org\"}], \"phones\": [{\"type\": \"WORK\", \"value\": \"+250788122409\"}, {\"type\": \"WORK\", \"value\": \"+250782220039\"}, {\"type\": \"CELL\", \"value\": \"+250785748990\"}], \"company\": \"UNDP RWANDA\", \"position\": \"Executive Associate to the RR\", \"websites\": [{\"type\": \"WORK\", \"value\": \"https://www.undp.org/rwanda\"}], \"addresses\": [{\"type\": \"WORK\", \"value\": \"4 KN 67 ST Kigali, Rwanda\"}]}",
+      "created_at": "2022-06-29 13:07:35",
+      "updated_at": "2022-07-05 13:32:21",
+      "tuid": "47415633662bc4e977ed17",
+      "security_enabled": "0",
+      "pin_code": null
+    }
+  ]

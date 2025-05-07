@@ -1,404 +1,378 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
-import { CreateTagDto, UpdateTagDto, CreateTagOrderDto, UpdateTagOrderDto } from './dto';
-import { UserTag, TagOrder, OrderStatus, UserRole } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
-import { PrismaService } from 'prisma/prisma.service';
-import { EmailService } from 'src/email/email.service';
-import { InputJsonValue } from '@prisma/client/runtime/library';
+// src/tags/tags.controller.ts
+import {
+  Controller,
+  Get,
+  Post,
+  Body,
+  Patch,
+  Param,
+  Delete,
+  Query,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  StreamableFile,
+  NotFoundException,
+  UseInterceptors,
+  UploadedFile,
+  ParseIntPipe,
+  BadRequestException,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import { TagsService } from './tags.service';
+import { CreateTagDto, UpdateTagDto } from './dto';
+import { UserRole } from '@prisma/client';
+import { PassThrough } from 'stream';
+import { Public } from 'src/common/decorators/public.decorator';
+import { RolesGuard } from 'src/auth/guards/roles.guard';
+import { Roles } from 'src/common/decorators/roles.decorator';
 
-@Injectable()
-export class TagsController {  // Ensure this line has the 'export' keyword
-    constructor(
-    private prisma: PrismaService,
-    private emailService: EmailService,
+@ApiTags('tag')
+@Controller('tag')
+export class TagsController {
+  constructor(
+    private readonly tagsService: TagsService,
   ) {}
 
-  // New method to find user by ID with limited information
-  async findUserById(userId: number) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        firstName: true,
-        lastName: true,
+  @Post()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create a new tag' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        data: {
+          type: 'string',
+          description: 'JSON string containing tag data',
+        },
+        avatar: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional avatar image file',
+        },
       },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
+      required: ['data'],
+    },
+  })
+  @ApiResponse({ status: 201, description: 'Tag created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid input data' })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  @UseInterceptors(FileInterceptor('avatar'))
+  async create(
+    @Body('data') dataString: string,
+    @UploadedFile() avatarFile?: Express.Multer.File,
+    @Query('useBase64') useBase64?: string,
+  ) {
+    // Validate input data string
+    if (!dataString) {
+      throw new BadRequestException('Tag data is required');
     }
 
-    return user;
-  }
-
-  // New method to find company by ID with limited information
-  async findCompanyById(companyId: number) {
-    const company = await this.prisma.company.findUnique({
-      where: { id: companyId },
-      select: {
-        id: true,
-        name: true,
-      },
-    });
-
-    if (!company) {
-      throw new NotFoundException(`Company with ID ${companyId} not found`);
+    let createTagDto: CreateTagDto;
+    try {
+      // Attempt to parse JSON
+      createTagDto = JSON.parse(dataString);
+    } catch (error) {
+      throw new BadRequestException(`Invalid JSON data: ${error.message}`);
     }
 
-    return company;
-  }
-
-  // === Tag Management ===
-
-  async createTag(createTagDto: CreateTagDto): Promise<UserTag> {
-    // Verify user exists
-    const user = await this.prisma.user.findUnique({
-      where: { id: createTagDto.userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${createTagDto.userId} not found`);
+    // Validate core required fields
+    if (!createTagDto.userId) {
+      throw new BadRequestException('User ID is required');
     }
 
-    // Generate a unique Tag UUID
-    const tuid = uuidv4();
+    // Ensure tagInfo exists
+    createTagDto.tagInfo = createTagDto.tagInfo || {};
+
+    // Process avatar if provided
+    if (avatarFile) {
+      try {
+        const shouldUseBase64 = useBase64 === 'true';
+        const avatarUrl = shouldUseBase64
+          ? await this.tagsService.convertAvatarToBase64(avatarFile)
+          : await this.tagsService.uploadAvatar(avatarFile);
+        
+        // Add avatar URL to tagInfo
+        createTagDto.tagInfo.avatar = avatarUrl;
+      } catch (error) {
+        // Log avatar processing error but continue with tag creation
+        console.error('Avatar processing error:', error);
+        throw new BadRequestException(`Avatar upload failed: ${error.message}`);
+      }
+    }
+
+    // Additional validation for tagInfo
+    this.validateTagInfo(createTagDto.tagInfo);
 
     // Create the tag
-    const tag = await this.prisma.userTag.create({
-      data: {
-        tuid,
-        userId: createTagDto.userId,
-        companyId: createTagDto.companyId,
-        tagInfo: createTagDto.tagInfo,
-        isActive: true,
-      },
-    });
-
-    // Send notification email to the user
-    await this.emailService.sendTagCreatedEmail(user.email, {
-      firstName: user.firstName,
-      lastName: user.lastName,
-      tagId: tag.tuid,
-    });
-
-    return tag;
+    try {
+      return await this.tagsService.createTag(createTagDto);
+    } catch (error) {
+      console.error('Tag creation error:', error);
+      throw new BadRequestException(`Failed to create tag: ${error.message}`);
+    }
   }
 
-  async findAllTags(
-    userId?: number,
-    companyId?: number,
-    isActive?: boolean,
-  ): Promise<UserTag[]> {
-    const where: any = {};
-
-    if (userId) {
-      where.userId = userId;
+  /**
+   * Validate tag information
+   * @param tagInfo Tag information object
+   */
+  private validateTagInfo(tagInfo: Record<string, any>): void {
+    // Validate name
+    if (!tagInfo.fname || !tagInfo.lname) {
+      throw new BadRequestException('First name and last name are required');
     }
 
-    if (companyId) {
-      where.companyId = companyId;
+    // Optional: Additional validations
+    if (tagInfo.emails) {
+      const invalidEmails = tagInfo.emails.filter(
+        (email: any) => !email.value || typeof email.value !== 'string'
+      );
+      if (invalidEmails.length > 0) {
+        throw new BadRequestException('Invalid email format');
+      }
     }
 
-    if (isActive !== undefined) {
-      where.isActive = isActive;
+    // Optional: Validate phone numbers
+    if (tagInfo.phones) {
+      const invalidPhones = tagInfo.phones.filter(
+        (phone: any) => !phone.value || typeof phone.value !== 'string'
+      );
+      if (invalidPhones.length > 0) {
+        throw new BadRequestException('Invalid phone number format');
+      }
     }
 
-    return this.prisma.userTag.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-  }
+    // Optional: Limit nested object depths or sizes
+    const maxNestedDepth = 3;
+    const maxNestedArraySize = 10;
 
-  async findTagById(id: number): Promise<UserTag> {
-    const tag = await this.prisma.userTag.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!tag) {
-      throw new NotFoundException(`Tag with ID ${id} not found`);
-    }
-
-    return tag;
-  }
-
-  async findTagByTuid(tuid: string): Promise<UserTag> {
-    const tag = await this.prisma.userTag.findUnique({
-      where: { tuid },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!tag) {
-      throw new NotFoundException(`Tag with TUID ${tuid} not found`);
-    }
-
-    return tag;
-  }
-
-  async updateTag(id: number, updateTagDto: UpdateTagDto): Promise<UserTag> {
-    // Verify tag exists
-    await this.findTagById(id);
-
-    return this.prisma.userTag.update({
-      where: { id },
-      data: updateTagDto,
-    });
-  }
-
-  async removeTag(id: number): Promise<UserTag> {
-    // Verify tag exists
-    await this.findTagById(id);
-
-    return this.prisma.userTag.delete({
-      where: { id },
-    });
-  }
-
-  // === Tag Orders Management ===
-
-  async createTagOrder(userId: number, createTagOrderDto: CreateTagOrderDto): Promise<TagOrder> {
-    // Verify user exists
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-    });
-
-    if (!user) {
-      throw new NotFoundException(`User with ID ${userId} not found`);
-    }
-
-    // Create the tag order
-    const tagOrder = await this.prisma.tagOrder.create({
-      data: {
-        userId,
-        companyId: createTagOrderDto.companyId,
-        requestData: createTagOrderDto.requestData,
-        status: OrderStatus.PENDING,
-      },
-    });
-
-    // Notify super admins about the new tag order
-    const superAdmins = await this.prisma.user.findMany({
-      where: { role: UserRole.SUPER_ADMIN },
-    });
-
-    for (const admin of superAdmins) {
-      await this.emailService.sendTagOrderNotificationEmail(admin.email, {
-        firstName: admin.firstName,
-        lastName: admin.lastName,
-        orderId: tagOrder.id,
-        requestorName: `${user.firstName} ${user.lastName}`,
-        requestorEmail: user.email,
-      });
-    }
-
-    return tagOrder;
-  }
-
-  async findAllTagOrders(
-    status?: OrderStatus,
-    userId?: number,
-    companyId?: number,
-  ): Promise<TagOrder[]> {
-    const where: any = {};
-
-    if (status) {
-      where.status = status;
-    }
-
-    if (userId) {
-      where.userId = userId;
-    }
-
-    if (companyId) {
-      where.companyId = companyId;
-    }
-
-    return this.prisma.tagOrder.findMany({
-      where,
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-  }
-
-  async findTagOrderById(id: number): Promise<TagOrder> {
-    const tagOrder = await this.prisma.tagOrder.findUnique({
-      where: { id },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            firstName: true,
-            lastName: true,
-          },
-        },
-        company: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
-    });
-
-    if (!tagOrder) {
-      throw new NotFoundException(`Tag order with ID ${id} not found`);
-    }
-
-    return tagOrder;
-  }
-
-  async approveTagOrder(id: number): Promise<TagOrder> {
-    // Verify order exists and is pending
-    const tagOrder = await this.findTagOrderById(id);
-
-    if (tagOrder.status !== OrderStatus.PENDING) {
-      throw new BadRequestException(`Tag order with ID ${id} is not in PENDING status`);
-    }
-
-    // Begin a transaction to ensure data consistency
-    return this.prisma.$transaction(async (prisma) => {
-      // Update the order status
-      const updatedOrder = await prisma.tagOrder.update({
-        where: { id },
-        data: {
-          status: OrderStatus.APPROVED,
-        },
-      });
-
-      // Get the user for the tag
-      const user = await prisma.user.findUnique({
-        where: { id: tagOrder.userId },
-      });
-
-      if (!user) {
-        throw new NotFoundException(`User with ID ${tagOrder.userId} not found`);
+    const checkNestedDepth = (obj: any, depth: number = 0): void => {
+      if (depth > maxNestedDepth) {
+        throw new BadRequestException('Tag info is too deeply nested');
       }
 
-      // Generate a unique Tag UUID
-      const tuid = uuidv4();
+      if (typeof obj === 'object' && obj !== null) {
+        Object.values(obj).forEach(value => {
+          if (Array.isArray(value) && value.length > maxNestedArraySize) {
+            throw new BadRequestException(`Array too large: ${value.length} > ${maxNestedArraySize}`);
+          }
+          checkNestedDepth(value, depth + 1);
+        });
+      }
+    };
 
-      // Create the actual tag
-      const newTag = await prisma.userTag.create({
+    try {
+      checkNestedDepth(tagInfo);
+    } catch (error) {
+      throw new BadRequestException(`Invalid tag info structure: ${error.message}`);
+    }
+  }
+
+  @Get()
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all tags with optional filtering' })
+  @ApiQuery({ name: 'userId', required: false, type: Number })
+  @ApiQuery({ name: 'companyId', required: false, type: Number })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiResponse({ status: 200, description: 'List of tags' })
+  async findAll(
+    @Query('userId') userId?: string,
+    @Query('companyId') companyId?: string,
+    @Query('isActive') isActive?: string,
+  ) {
+    return this.tagsService.findAllTags(
+      userId ? +userId : undefined,
+      companyId ? +companyId : undefined,
+      isActive ? isActive === 'true' : undefined,
+    );
+  }
+
+  @Get('my-tags')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get tags based on user role - company tags for admins, individual tags for users' })
+  @ApiResponse({ status: 200, description: 'List of relevant tags' })
+  async getRelevantTags(@Request() req) {
+    return this.tagsService.findTagsByUserRole(req.user.userId, req.user.role, req.user.companyId);
+  }
+
+  @Get('advanced')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get tags with advanced filtering, searching and pagination' })
+  @ApiQuery({ name: 'userId', required: false, type: Number })
+  @ApiQuery({ name: 'companyId', required: false, type: Number })
+  @ApiQuery({ name: 'isActive', required: false, type: Boolean })
+  @ApiQuery({ name: 'tagType', required: false, type: String })
+  @ApiQuery({ name: 'searchTerm', required: false, type: String })
+  @ApiQuery({ name: 'page', required: false, type: Number })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'sortBy', required: false, type: String })
+  @ApiQuery({ name: 'sortOrder', required: false, enum: ['asc', 'desc'] })
+  @ApiResponse({ status: 200, description: 'Paginated list of tags' })
+  async findWithAdvancedFilters(
+    @Query('userId') userId?: string,
+    @Query('companyId') companyId?: string,
+    @Query('isActive') isActive?: string,
+    @Query('tagType') tagType?: string,
+    @Query('searchTerm') searchTerm?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('sortBy') sortBy?: string,
+    @Query('sortOrder') sortOrder?: 'asc' | 'desc',
+  ) {
+    return this.tagsService.findTagsWithAdvancedFilters({
+      userId: userId ? +userId : undefined,
+      companyId: companyId ? +companyId : undefined,
+      isActive: isActive ? isActive === 'true' : undefined,
+      tagType,
+      searchTerm,
+      page: page ? +page : undefined,
+      limit: limit ? +limit : undefined,
+      sortBy,
+      sortOrder,
+    });
+  }
+
+  @Get('company-admin')
+  @ApiBearerAuth()
+  @UseGuards(RolesGuard)
+  @Roles(UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)
+  @ApiOperation({ summary: 'Get all company tags (admin only)' })
+  @ApiResponse({ status: 200, description: 'List of company tags' })
+  @ApiResponse({ status: 403, description: 'Forbidden - requires admin access' })
+  async getCompanyTags(@Request() req) {
+    if (!req.user.companyId) {
+      throw new BadRequestException('User is not associated with any company');
+    }
+    
+    return this.tagsService.findAllTags(
+      undefined,
+      req.user.companyId,
+      true
+    );
+  }
+  
+  @Patch(':tuid')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Update a tag' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
         data: {
-          tuid,
-          userId: tagOrder.userId,
-          companyId: tagOrder.companyId,
-          tagInfo: tagOrder.requestData as InputJsonValue,
-          isActive: true,
-          tagOrderId: tagOrder.id, // Link to the originating order
+          type: 'string',
+          description: 'JSON string containing tag update data',
         },
-      });
-
-      // Send confirmation email to the user
-      await this.emailService.sendTagApprovedEmail(user.email, {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        tagId: newTag.tuid,
-        setPasswordUrl: `https://app.bizcotap.com/set-password?email=${encodeURIComponent(user.email)}&token=${this.generatePasswordToken(user.email)}`,
-      });
-
-      return updatedOrder;
-    });
-  }
-
-  async rejectTagOrder(id: number): Promise<TagOrder> {
-    // Verify order exists and is pending
-    const tagOrder = await this.findTagOrderById(id);
-
-    if (tagOrder.status !== OrderStatus.PENDING) {
-      throw new BadRequestException(`Tag order with ID ${id} is not in PENDING status`);
-    }
-
-    // Update the order status
-    const updatedOrder = await this.prisma.tagOrder.update({
-      where: { id },
-      data: {
-        status: OrderStatus.REJECTED,
+        avatar: {
+          type: 'string',
+          format: 'binary',
+          description: 'Optional avatar image file',
+        },
       },
-    });
-
-    // Get user for notification
-    const user = await this.prisma.user.findUnique({
-      where: { id: tagOrder.userId },
-    });
-
-    // Send rejection email
-    if (user) {
-      await this.emailService.sendTagRejectedEmail(user.email, {
-        firstName: user.firstName,
-        lastName: user.lastName,
-        orderId: tagOrder.id,
-      });
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Tag updated successfully' })
+  @ApiResponse({ status: 404, description: 'Tag not found' })
+  @UseInterceptors(FileInterceptor('avatar'))
+  async update(
+    @Param('tuid') tuid: string,
+    @Body('data') dataString: string,
+    @UploadedFile() avatarFile?: Express.Multer.File,
+    @Query('useBase64') useBase64?: string,
+    @Query('removeAvatar') removeAvatar?: string,
+  ) {
+    // Find the existing tag
+    const tag = await this.tagsService.findTagByTuid(tuid);
+    
+    // Parse the update data from JSON string (if provided)
+    let updateTagDto: UpdateTagDto = {};
+    if (dataString) {
+      try {
+        updateTagDto = JSON.parse(dataString);
+      } catch (error) {
+        throw new BadRequestException('Invalid JSON data');
+      }
+    }
+    
+    // Handle avatar - process new upload, remove, or keep existing
+    if (avatarFile) {
+      // Upload new avatar
+      const shouldUseBase64 = useBase64 === 'true';
+      const avatarUrl = shouldUseBase64
+        ? await this.tagsService.convertAvatarToBase64(avatarFile)
+        : await this.tagsService.uploadAvatar(avatarFile);
+      
+      // Make sure tagInfo exists
+      if (!updateTagDto.tagInfo) {
+        updateTagDto.tagInfo = {};
+      }
+      
+      // Add avatar URL to tagInfo
+      updateTagDto.tagInfo.avatar = avatarUrl;
+    } else if (removeAvatar === 'true') {
+      // Remove avatar
+      // Make sure tagInfo exists
+      if (!updateTagDto.tagInfo) {
+        updateTagDto.tagInfo = {};
+      }
+      
+      // Explicitly set avatar to null to remove it
+      updateTagDto.tagInfo.avatar = null;
+    }
+    
+    // Update the tag
+    return this.tagsService.updateTag(tag.id, updateTagDto);
+  }
+  
+  @Get(':tuid/vcard')
+  @Public()
+  @ApiOperation({ summary: 'Download vCard (.vcf) with enhanced social media and WhatsApp support' })
+  @ApiResponse({ status: 200, description: 'vCard file returned' })
+  @ApiResponse({ status: 404, description: 'Tag not found' })
+  async downloadVCard(@Param('tuid') tuid: string): Promise<StreamableFile> {
+    const tag = await this.tagsService.findTagByTuid(tuid);
+    if (!tag || !tag.tagInfo) {
+      throw new NotFoundException('Tag or tag info not found');
     }
 
-    return updatedOrder;
+    // Safely assert tagInfo as expected structure
+    const tagInfo = tag.tagInfo as Record<string, any>;
+    
+    // Generate VCard content
+    const vcardContent = this.tagsService.generateVCard(tagInfo);
+    
+    const fname = tagInfo.fname || 'Unknown';
+    const lname = tagInfo.lname || 'User';
+    
+    const buffer = Buffer.from(vcardContent, 'utf-8');
+    const stream = new PassThrough();
+    stream.end(buffer);
+
+    return new StreamableFile(stream, {
+      disposition: `attachment; filename="${fname}_${lname}.vcf"`,
+      type: 'text/vcard; charset=utf-8',
+    });
+  }
+  
+  @Get(':tuid')
+  @Public()
+  @ApiOperation({ summary: 'Get a tag by TUID (public)' })
+  @ApiResponse({ status: 200, description: 'Tag details' })
+  @ApiResponse({ status: 404, description: 'Tag not found' })
+  async findOne(@Param('tuid') tuid: string) {
+    return this.tagsService.findTagByTuid(tuid);
   }
 
-  // Helper method to generate a password reset token
-  private generatePasswordToken(email: string): string {
-    // In a real application, you'd use a JWT or a secure token method
-    // This is a simplified example
-    const timestamp = Date.now();
-    return Buffer.from(`${email}:${timestamp}`).toString('base64');
+  @Delete(':tuid')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a tag' })
+  @ApiResponse({ status: 200, description: 'Tag deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Tag not found' })
+  async remove(@Param('tuid') tuid: string) {
+    const tag = await this.tagsService.findTagByTuid(tuid);
+    return this.tagsService.removeTag(tag.id);
   }
 }

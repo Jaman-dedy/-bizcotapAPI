@@ -1,4 +1,8 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { CreateUserDto, UpdateUserDto } from './dto';
 import { hash } from 'argon2';
 import { User, Prisma } from '@prisma/client';
@@ -37,7 +41,7 @@ export class UsersService {
     where?: Prisma.UserWhereInput;
   }): Promise<User[]> {
     const { skip, take, orderBy, where } = params;
-    
+
     return this.prisma.user.findMany({
       skip,
       take,
@@ -75,7 +79,7 @@ export class UsersService {
     await this.findOne(id);
 
     // If updating password, hash it
-    let data = { ...updateUserDto };
+    const data = { ...updateUserDto };
     if (updateUserDto.password) {
       data.password = await hash(updateUserDto.password);
     }
