@@ -19,7 +19,15 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiQuery, ApiConsumes, ApiBody } from '@nestjs/swagger';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiQuery,
+  ApiConsumes,
+  ApiBody,
+} from '@nestjs/swagger';
 import { TagsService } from './tags.service';
 import { CreateTagDto, UpdateTagDto } from './dto';
 import { UserRole } from '@prisma/client';
@@ -31,9 +39,7 @@ import { Roles } from 'src/common/decorators/roles.decorator';
 @ApiTags('tag')
 @Controller('tag')
 export class TagsController {
-  constructor(
-    private readonly tagsService: TagsService,
-  ) {}
+  constructor(private readonly tagsService: TagsService) {}
 
   @Post()
   @ApiBearerAuth()
@@ -93,7 +99,7 @@ export class TagsController {
         const avatarUrl = shouldUseBase64
           ? await this.tagsService.convertAvatarToBase64(avatarFile)
           : await this.tagsService.uploadAvatar(avatarFile);
-        
+
         // Add avatar URL to tagInfo
         createTagDto.tagInfo.avatar = avatarUrl;
       } catch (error) {
@@ -128,7 +134,7 @@ export class TagsController {
     // Optional: Additional validations
     if (tagInfo.emails) {
       const invalidEmails = tagInfo.emails.filter(
-        (email: any) => !email.value || typeof email.value !== 'string'
+        (email: any) => !email.value || typeof email.value !== 'string',
       );
       if (invalidEmails.length > 0) {
         throw new BadRequestException('Invalid email format');
@@ -138,7 +144,7 @@ export class TagsController {
     // Optional: Validate phone numbers
     if (tagInfo.phones) {
       const invalidPhones = tagInfo.phones.filter(
-        (phone: any) => !phone.value || typeof phone.value !== 'string'
+        (phone: any) => !phone.value || typeof phone.value !== 'string',
       );
       if (invalidPhones.length > 0) {
         throw new BadRequestException('Invalid phone number format');
@@ -155,9 +161,11 @@ export class TagsController {
       }
 
       if (typeof obj === 'object' && obj !== null) {
-        Object.values(obj).forEach(value => {
+        Object.values(obj).forEach((value) => {
           if (Array.isArray(value) && value.length > maxNestedArraySize) {
-            throw new BadRequestException(`Array too large: ${value.length} > ${maxNestedArraySize}`);
+            throw new BadRequestException(
+              `Array too large: ${value.length} > ${maxNestedArraySize}`,
+            );
           }
           checkNestedDepth(value, depth + 1);
         });
@@ -167,7 +175,9 @@ export class TagsController {
     try {
       checkNestedDepth(tagInfo);
     } catch (error) {
-      throw new BadRequestException(`Invalid tag info structure: ${error.message}`);
+      throw new BadRequestException(
+        `Invalid tag info structure: ${error.message}`,
+      );
     }
   }
 
@@ -192,15 +202,24 @@ export class TagsController {
 
   @Get('my-tags')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get tags based on user role - company tags for admins, individual tags for users' })
+  @ApiOperation({
+    summary:
+      'Get tags based on user role - company tags for admins, individual tags for users',
+  })
   @ApiResponse({ status: 200, description: 'List of relevant tags' })
   async getRelevantTags(@Request() req) {
-    return this.tagsService.findTagsByUserRole(req.user.userId, req.user.role, req.user.companyId);
+    return this.tagsService.findTagsByUserRole(
+      req.user.userId,
+      req.user.role,
+      req.user.companyId,
+    );
   }
 
   @Get('advanced')
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Get tags with advanced filtering, searching and pagination' })
+  @ApiOperation({
+    summary: 'Get tags with advanced filtering, searching and pagination',
+  })
   @ApiQuery({ name: 'userId', required: false, type: Number })
   @ApiQuery({ name: 'companyId', required: false, type: Number })
   @ApiQuery({ name: 'isActive', required: false, type: Boolean })
@@ -241,19 +260,18 @@ export class TagsController {
   @Roles(UserRole.COMPANY_ADMIN, UserRole.SUPER_ADMIN)
   @ApiOperation({ summary: 'Get all company tags (admin only)' })
   @ApiResponse({ status: 200, description: 'List of company tags' })
-  @ApiResponse({ status: 403, description: 'Forbidden - requires admin access' })
+  @ApiResponse({
+    status: 403,
+    description: 'Forbidden - requires admin access',
+  })
   async getCompanyTags(@Request() req) {
     if (!req.user.companyId) {
       throw new BadRequestException('User is not associated with any company');
     }
-    
-    return this.tagsService.findAllTags(
-      undefined,
-      req.user.companyId,
-      true
-    );
+
+    return this.tagsService.findAllTags(undefined, req.user.companyId, true);
   }
-  
+
   @Patch(':tuid')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update a tag' })
@@ -286,7 +304,7 @@ export class TagsController {
   ) {
     // Find the existing tag
     const tag = await this.tagsService.findTagByTuid(tuid);
-    
+
     // Parse the update data from JSON string (if provided)
     let updateTagDto: UpdateTagDto = {};
     if (dataString) {
@@ -296,7 +314,7 @@ export class TagsController {
         throw new BadRequestException('Invalid JSON data');
       }
     }
-    
+
     // Handle avatar - process new upload, remove, or keep existing
     if (avatarFile) {
       // Upload new avatar
@@ -304,12 +322,12 @@ export class TagsController {
       const avatarUrl = shouldUseBase64
         ? await this.tagsService.convertAvatarToBase64(avatarFile)
         : await this.tagsService.uploadAvatar(avatarFile);
-      
+
       // Make sure tagInfo exists
       if (!updateTagDto.tagInfo) {
         updateTagDto.tagInfo = {};
       }
-      
+
       // Add avatar URL to tagInfo
       updateTagDto.tagInfo.avatar = avatarUrl;
     } else if (removeAvatar === 'true') {
@@ -318,18 +336,21 @@ export class TagsController {
       if (!updateTagDto.tagInfo) {
         updateTagDto.tagInfo = {};
       }
-      
+
       // Explicitly set avatar to null to remove it
       updateTagDto.tagInfo.avatar = null;
     }
-    
+
     // Update the tag
     return this.tagsService.updateTag(tag.id, updateTagDto);
   }
-  
+
   @Get(':tuid/vcard')
   @Public()
-  @ApiOperation({ summary: 'Download vCard (.vcf) with enhanced social media and WhatsApp support' })
+  @ApiOperation({
+    summary:
+      'Download vCard (.vcf) with enhanced social media and WhatsApp support',
+  })
   @ApiResponse({ status: 200, description: 'vCard file returned' })
   @ApiResponse({ status: 404, description: 'Tag not found' })
   async downloadVCard(@Param('tuid') tuid: string): Promise<StreamableFile> {
@@ -340,13 +361,13 @@ export class TagsController {
 
     // Safely assert tagInfo as expected structure
     const tagInfo = tag.tagInfo as Record<string, any>;
-    
+
     // Generate VCard content
     const vcardContent = this.tagsService.generateVCard(tagInfo);
-    
+
     const fname = tagInfo.fname || 'Unknown';
     const lname = tagInfo.lname || 'User';
-    
+
     const buffer = Buffer.from(vcardContent, 'utf-8');
     const stream = new PassThrough();
     stream.end(buffer);
@@ -356,7 +377,7 @@ export class TagsController {
       type: 'text/vcard; charset=utf-8',
     });
   }
-  
+
   @Get(':tuid')
   @Public()
   @ApiOperation({ summary: 'Get a tag by TUID (public)' })

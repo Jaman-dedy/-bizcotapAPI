@@ -3,6 +3,7 @@
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
 }
 
 datasource db {
@@ -98,7 +99,7 @@ model Company {
   industry           String?
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
-  
+
   // Compliance fields
   dataProcessingAgreement Boolean       @default(false)
   dataProcessingDate     DateTime?
@@ -157,7 +158,7 @@ model UserTag {
 
   @@index([tuid])
   @@index([userId])
-  
+
   views     TagView[]
   actions   TagAction[]
 }
@@ -173,13 +174,13 @@ model ExchangedInfo {
   additionalInfo     Json?              // Additional data captured
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
-  
+
   // GDPR compliance fields
   consentGiven       Boolean            @default(false)
   consentTimestamp   DateTime?
   consentIpAddress   String?
   expiryDate         DateTime?          // When to automatically delete this data
-  
+
   // Relations
   userTag            UserTag            @relation(fields: [userTagId], references: [id], onDelete: Cascade)
   userTagId          Int
@@ -223,7 +224,7 @@ model DataConsent {
   ipAddress          String?
   userAgent          String?
   createdAt          DateTime           @default(now())
-  
+
   @@index([consentType, version])
 }
 
