@@ -36,6 +36,11 @@ export class UpdateTagDto extends PartialType(CreateTagDto) {
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiProperty({ description: 'Whether the tag has contact information', required: false })
+  @IsBoolean()
+  @IsOptional()
+  hasContact?: boolean;
 }
 
 export class CreateTagOrderDto {
@@ -77,6 +82,9 @@ export class TagResponseDto {
 
   @ApiProperty({ example: true })
   isActive: boolean;
+
+  @ApiProperty({ example: false })
+  hasContact: boolean;
 
   @ApiProperty({ example: 1 })
   userId: number;

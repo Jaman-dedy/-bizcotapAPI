@@ -139,6 +139,7 @@ model UserTag {
   tuid               String             @unique // The UUID for NFC tag functionality
   tagInfo            Json               // Store tag configuration as JSON
   isActive           Boolean            @default(true)
+  hasContact         Boolean            @default(false)
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
