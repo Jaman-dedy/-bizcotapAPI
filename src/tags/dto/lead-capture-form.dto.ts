@@ -61,7 +61,54 @@ export class CreateFormConfigDto {
 }
 
 export class UpdateFormConfigDto extends PartialType(CreateFormConfigDto) {
-  // All fields are optional for updates
+  @ApiProperty({ 
+    description: 'Tag UUID/TUID this form belongs to',
+    example: 'fd6d436d-e99e-470f-bba6-e2d59b756fe2'
+  })
+  @IsNotEmpty()
+  @IsString()
+  @IsUUID('4', { message: 'tagId must be a valid UUID (v4 format)' })
+  tagId: string;
+
+  @ApiProperty({ description: 'Form title', default: 'Contact Me', required: false })
+  @IsString()
+  @IsOptional()
+  formTitle?: string;
+
+  @ApiProperty({ description: 'Name field value (null when disabled, "value" when enabled)', required: false, nullable: true })
+  @IsString()
+  @IsOptional()
+  nameField?: string | null;
+
+  @ApiProperty({ description: 'Email field value (null when disabled, "value" when enabled)', required: false, nullable: true })
+  @IsString()
+  @IsOptional()
+  emailField?: string | null;
+
+  @ApiProperty({ description: 'Phone field value (null when disabled, "value" when enabled)', required: false, nullable: true })
+  @IsString()
+  @IsOptional()
+  phoneField?: string | null;
+
+  @ApiProperty({ description: 'Company field value (null when disabled, "value" when enabled)', required: false, nullable: true })
+  @IsString()
+  @IsOptional()
+  companyField?: string | null;
+
+  @ApiProperty({ description: 'Message field value (null when disabled, "value" when enabled)', required: false, nullable: true })
+  @IsString()
+  @IsOptional()
+  messageField?: string | null;
+
+  @ApiProperty({ description: 'Text for the submit button', default: 'Submit', required: false })
+  @IsString()
+  @IsOptional()
+  submitButtonText?: string;
+
+  @ApiProperty({ description: 'Thank you message shown after submission', default: 'Thank you for your message. I will get back to you soon!', required: false })
+  @IsString()
+  @IsOptional()
+  thankYouMessage?: string;
 }
 
 export class FormConfigResponseDto {

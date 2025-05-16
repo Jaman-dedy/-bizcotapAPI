@@ -50,4 +50,42 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       await app.close();
     });
   }
+
+  async findContactsByCompanyId(companyId: number) {
+    // Using Prisma's relational query capabilities
+    return this.exchangedInfo.findMany({
+      where: {
+        userTag: {
+          companyId: companyId,
+        },
+      },
+      include: {
+        userTag: {
+          include: {
+            company: true,
+          },
+        },
+        user: true,
+        sender: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    });
+  }
+
+  async findContactsByCompanyIdRaw(companyId: number) {
+    return this.$queryRaw`
+      SELECT 
+        e.id, e.names, e.email, e.phoneNumber, e.longitude, e.latitude, 
+        e.additionalInfo, e.createdAt, e.updatedAt, e.consentGiven,
+        t.id AS "tagId", t.tuid AS "tagUuid", t.tagInfo AS "tagInfo",
+        c.id AS "companyId", c.name AS "companyName"
+      FROM "ExchangedInfo" e
+      JOIN "UserTag" t ON e."userTagId" = t.id
+      JOIN "Company" c ON t."companyId" = c.id
+      WHERE c.id = ${companyId}
+      ORDER BY e."createdAt" DESC
+    `;
+  }
 }

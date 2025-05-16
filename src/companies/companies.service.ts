@@ -136,6 +136,11 @@ export class CompaniesService {
     return company;
   }
 
+  async findContactsByCompanyId(id: number) {
+    await this.findOne(id);
+    return this.prisma.findContactsByCompanyId(id);
+  }
+
   async update(
     id: number,
     updateCompanyDto: UpdateCompanyDto,
