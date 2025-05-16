@@ -10,6 +10,12 @@ import {
 import { ApiProperty, PartialType } from '@nestjs/swagger';
 import { OrderStatus } from '@prisma/client';
 
+export {
+  CreateFormConfigDto,
+  UpdateFormConfigDto,
+  FormConfigResponseDto
+} from './lead-capture-form.dto';
+
 export class CreateTagDto {
   @ApiProperty({ description: 'User ID who owns this tag' })
   @IsNumber()

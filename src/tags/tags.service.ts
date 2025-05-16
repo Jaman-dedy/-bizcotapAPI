@@ -8,10 +8,16 @@ import {
   CreateTagDto,
   UpdateTagDto,
   CreateTagOrderDto,
+  CreateFormConfigDto,
+  UpdateFormConfigDto,
 } from './dto';
 import { UserTag, TagOrder, OrderStatus, UserRole } from '@prisma/client';
 import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from 'prisma/prisma.service';
+import { PrismaClient } from '@prisma/client';
+
+// Type helper to access Prisma models
+type PrismaWithModels = PrismaClient;
 import { EmailService } from 'src/email/email.service';
 import { InputJsonValue } from '@prisma/client/runtime/library';
 import * as fs from 'fs';
@@ -28,6 +34,22 @@ interface UserBasicInfo {
 interface CompanyBasicInfo {
   id: number;
   name: string;
+}
+
+export interface FormConfig {
+  id: number;
+  tagId: string;  // Changed to string to support UUID
+  formTitle: string;
+  nameField: string | null;
+  emailField: string | null;
+  phoneField: string | null;
+  messageField: string | null;
+  companyField: string | null;
+  submitButtonText: string;
+  thankYouMessage: string;
+  createdAt: Date;
+  updatedAt: Date;
+  tag?: UserTag;
 }
 
 @Injectable()
@@ -227,7 +249,6 @@ export class TagsService {
     const role = createTagDto.tagInfo?.role || 
                  (createTagDto.companyId ? 'COMPANY_MEMBER' : 'INDIVIDUAL');
     
-    // Remove the strict individual check
     // Verify company exists if companyId is provided
     if (createTagDto.companyId) {
       const company = await this.prisma.company.findUnique({
@@ -267,21 +288,27 @@ export class TagsService {
     // Generate a unique TUID
     const tuid = uuidv4();
   
-    // Create the tag with updated logic
+    // Create the tag without hasContact field
     const tag = await this.prisma.userTag.create({
       data: {
         tuid,
         userId: createTagDto.userId,
-        companyId: createTagDto.companyId, // Allow company association
+        companyId: createTagDto.companyId,
         tagInfo: {
           ...createTagDto.tagInfo,
-          role: role, // Ensure role is set correctly
+          role: role,
         },
         isActive: true,
       },
     });
   
-    return tag;
+    // Set hasContact field using raw SQL
+    await this.prisma.$executeRaw`
+      UPDATE "UserTag" SET "hasContact" = false WHERE id = ${tag.id}
+    `;
+  
+    // Return the complete tag data
+    return this.findTagById(tag.id);
   }
 
   async findAllTags(
@@ -533,8 +560,215 @@ export class TagsService {
     });
   }
 
-  // === Tag Orders Management ===
-// src/tags/tags.service.ts (continued)
+  // === Form Configuration Management ===
+
+  async createFormConfig(createFormConfigDto: CreateFormConfigDto): Promise<FormConfig> {
+    // tagId is now expected to be a UUID/TUID string
+    const tagIdValue = createFormConfigDto.tagId;
+    let tagIdNumeric: number | null = null;
+    
+    // Validate the UUID format
+    if (typeof tagIdValue === 'string' && 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tagIdValue)) {
+      try {
+        // Find the tag by TUID to ensure it exists
+        const tag = await this.findTagByTuid(tagIdValue);
+        tagIdNumeric = tag.id; // Keep track of the numeric ID for backwards compatibility
+      } catch (error) {
+        throw new NotFoundException(`Tag with TUID ${tagIdValue} not found`);
+      }
+    } else {
+      throw new BadRequestException(`Invalid tagId format: ${tagIdValue}. Expected UUID format.`);
+    }
+    
+    // Check if config already exists for this tag UUID or numeric ID
+    const existingConfig = await this.prisma.$queryRaw<Array<any>>`
+      SELECT * FROM "FormConfig" 
+      WHERE "tagId" = ${tagIdValue} OR "tagIdNumeric" = ${tagIdNumeric}
+    `;
+    
+    if (existingConfig && existingConfig.length > 0) {
+      throw new BadRequestException(`Form configuration already exists for tag ID ${tagIdValue}`);
+    }
+    
+    // Create form config with both UUID and numeric ID
+    const createdConfigs = await this.prisma.$queryRaw<Array<FormConfig>>`
+      INSERT INTO "FormConfig" (
+        "tagId", 
+        "tagIdNumeric", 
+        "formTitle", 
+        "nameField", 
+        "emailField", 
+        "phoneField", 
+        "companyField", 
+        "messageField", 
+        "submitButtonText", 
+        "thankYouMessage",
+        "createdAt",
+        "updatedAt"
+      ) VALUES (
+        ${tagIdValue},
+        ${tagIdNumeric},
+        ${createFormConfigDto.formTitle || 'Contact Me'},
+        ${createFormConfigDto.nameField || 'value'},
+        ${createFormConfigDto.emailField || 'value'},
+        ${createFormConfigDto.phoneField},
+        ${createFormConfigDto.companyField},
+        ${createFormConfigDto.messageField},
+        ${createFormConfigDto.submitButtonText || 'Submit'},
+        ${createFormConfigDto.thankYouMessage || 'Thank you for your message. I will get back to you soon!'},
+        NOW(),
+        NOW()
+      )
+      RETURNING *
+    `;
+    
+    return createdConfigs[0];
+  }
+  
+  async getFormConfigByTagId(tagId: string): Promise<FormConfig> {
+    let tagIdNumeric: number | null = null;
+    
+    // If it's a UUID format
+    if (typeof tagId === 'string' && 
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(tagId)) {
+      try {
+        // Find the tag to get its numeric ID
+        const tag = await this.findTagByTuid(tagId);
+        tagIdNumeric = tag.id;
+      } catch (error) {
+        // If tag not found by TUID, we'll still try to find the form config by tagId
+      }
+    } else {
+      throw new BadRequestException(`Invalid tagId format: ${tagId}. Expected UUID format.`);
+    }
+    
+    // Try to find the form config using raw SQL to handle both types
+    const formConfigs = await this.prisma.$queryRaw<Array<FormConfig>>`
+      SELECT * FROM "FormConfig" 
+      WHERE "tagId" = ${tagId} 
+      OR "tagIdNumeric" = ${tagIdNumeric}
+      LIMIT 1
+    `;
+    
+    if (!formConfigs || formConfigs.length === 0) {
+      throw new NotFoundException(`Form configuration not found for tag ID ${tagId}`);
+    }
+    
+    return formConfigs[0];
+  }
+
+  async getFormConfigByTagTuid(tuid: string): Promise<FormConfig> {
+    // Find the tag by TUID
+    const tag = await this.findTagByTuid(tuid);
+    
+    // Then find the form config using the tag's numeric ID
+    const formConfig = await (this.prisma as any).formConfig.findUnique({
+      where: { tagId: tag.id },
+    });
+    
+    if (!formConfig) {
+      throw new NotFoundException(`Form configuration not found for tag TUID ${tuid}`);
+    }
+    
+    return formConfig;
+  }
+
+  async updateFormConfig(id: number, updateFormConfigDto: UpdateFormConfigDto): Promise<FormConfig> {
+    const formConfig = await (this.prisma as any).formConfig.findUnique({
+      where: { id },
+    });
+    
+    if (!formConfig) {
+      throw new NotFoundException(`Form configuration not found with ID ${id}`);
+    }
+    
+    return (this.prisma as any).formConfig.update({
+      where: { id },
+      data: updateFormConfigDto,
+    });
+  }
+
+  async deleteFormConfig(id: number): Promise<FormConfig> {
+    const formConfig = await (this.prisma as any).formConfig.findUnique({
+      where: { id },
+    });
+    
+    if (!formConfig) {
+      throw new NotFoundException(`Form configuration not found with ID ${id}`);
+    }
+    
+    return (this.prisma as any).formConfig.delete({
+      where: { id },
+    });
+  }
+
+  async updateTagContactStatus(tagId: number, hasContact: boolean): Promise<UserTag> {
+    const tag = await this.findTagById(tagId);
+    
+    // Update the hasContact flag
+    await this.prisma.$executeRaw`
+      UPDATE "UserTag" SET "hasContact" = ${hasContact} WHERE id = ${tagId}
+    `;
+    
+    const updatedTag = await this.prisma.userTag.findUnique({
+      where: { id: tagId },
+    });
+    
+    if (!updatedTag) {
+      throw new NotFoundException(`Tag with ID ${tagId} not found after update`);
+    }
+    
+    // If enabling contact form, create a default form config if it doesn't exist
+    if (hasContact) {
+      const existingConfig = await (this.prisma as any).formConfig.findUnique({
+        where: { tagId },
+      });
+      
+      if (!existingConfig) {
+        await (this.prisma as any).formConfig.create({
+          data: {
+            tagId,
+            formTitle: 'Contact Me',
+            nameField: 'value',
+            emailField: 'value',
+            phoneField: null,
+            companyField: null,
+            messageField: null,
+            submitButtonText: 'Submit',
+            thankYouMessage: 'Thank you for your message. I will get back to you soon!',
+          },
+        });
+      }
+    }
+    
+    return updatedTag;
+  }
+  
+  async toggleFormField(formConfigId: number, field: string, enabled: boolean): Promise<FormConfig> {
+    const formConfig = await (this.prisma as any).formConfig.findUnique({
+      where: { id: formConfigId },
+    });
+    
+    if (!formConfig) {
+      throw new NotFoundException(`Form configuration not found with ID ${formConfigId}`);
+    }
+    
+    const validFields = ['nameField', 'emailField', 'phoneField', 'companyField', 'messageField'];
+    
+    if (!validFields.includes(field)) {
+      throw new BadRequestException(`Invalid field: ${field}`);
+    }
+    
+    const updateData = {
+      [field]: enabled ? 'value' : null
+    };
+    
+    return (this.prisma as any).formConfig.update({
+      where: { id: formConfigId },
+      data: updateData
+    });
+  }
 
   // === Tag Orders Management ===
 
@@ -650,13 +884,13 @@ export class TagsService {
   async approveTagOrder(id: number): Promise<TagOrder> {
     // Verify order exists and is pending
     const tagOrder = await this.findTagOrderById(id);
-
+  
     if (tagOrder.status !== OrderStatus.PENDING) {
       throw new BadRequestException(
         `Tag order with ID ${id} is not in PENDING status`,
       );
     }
-
+  
     // Begin a transaction to ensure data consistency
     return this.prisma.$transaction(async (prisma) => {
       // Update the order status
@@ -666,22 +900,22 @@ export class TagsService {
           status: OrderStatus.APPROVED,
         },
       });
-
+  
       // Get the user for the tag
       const user = await prisma.user.findUnique({
         where: { id: tagOrder.userId },
       });
-
+  
       if (!user) {
         throw new NotFoundException(
           `User with ID ${tagOrder.userId} not found`,
         );
       }
-
+  
       // Generate a unique Tag UUID
       const tuid = uuidv4();
-
-      // Create the actual tag
+  
+      // Create the actual tag without hasContact field
       const newTag = await prisma.userTag.create({
         data: {
           tuid,
@@ -692,7 +926,12 @@ export class TagsService {
           tagOrderId: tagOrder.id, // Link to the originating order
         },
       });
-
+  
+      // Set hasContact field using raw SQL
+      await prisma.$executeRaw`
+        UPDATE "UserTag" SET "hasContact" = false WHERE id = ${newTag.id}
+      `;
+  
       // Send confirmation email to the user
       await this.emailService.sendTagApprovedEmail(user.email, {
         firstName: user.firstName,
@@ -700,7 +939,7 @@ export class TagsService {
         tagId: newTag.tuid,
         setPasswordUrl: `https://app.bizcotap.com/set-password?email=${encodeURIComponent(user.email)}&token=${this.generatePasswordToken(user.email)}`,
       });
-
+  
       return updatedOrder;
     });
   }
@@ -757,10 +996,10 @@ export class TagsService {
   generateVCard(tagInfo: Record<string, any>): string {
     const VCF = require('vcf');
     const vcard = new VCF();
-
+ 
     const fname = tagInfo.fname || 'Unknown';
     const lname = tagInfo.lname || 'User';
-
+ 
     // Basic info
     vcard.set('n', `${lname};${fname}`);
     vcard.set('fn', `${fname} ${lname}`);
@@ -886,7 +1125,7 @@ export class TagsService {
       const formattedDate = date.toISOString().split('T')[0].replace(/-/g, '');
       vcard.set('bday', formattedDate);
     }
-
+ 
     return vcard.toString();
   }
-}
+ }

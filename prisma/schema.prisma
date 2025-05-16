@@ -139,7 +139,7 @@ model UserTag {
   tuid               String             @unique // The UUID for NFC tag functionality
   tagInfo            Json               // Store tag configuration as JSON
   isActive           Boolean            @default(true)
-  hasContact         Boolean            @default(false)
+  hasContact         Boolean            @default(false) 
   createdAt          DateTime           @default(now())
   updatedAt          DateTime           @updatedAt
 
@@ -156,6 +156,7 @@ model UserTag {
   originatingOrder   TagOrder?          @relation("OrderToTag", fields: [tagOrderId], references: [id])
   tagOrderId         Int?               @unique
   exchangedInfos     ExchangedInfo[]
+  formConfig         FormConfig?
 
   @@index([tuid])
   @@index([userId])
@@ -264,4 +265,27 @@ model TagAction {
   @@index([action])
   @@index([createdAt])
   @@index([tuid])
+}
+
+model FormConfig {
+  id                Int       @id @default(autoincrement())
+  tagId             String?   // UUID format
+  tagIdNumeric      Int?      @unique // Make tagIdNumeric unique for one-to-one relation
+  formTitle         String    @default("Contact Me")
+  nameField         String?   // null when disabled, 'value' when enabled
+  emailField        String?   // null when disabled, 'value' when enabled
+  phoneField        String?   // null when disabled, 'value' when enabled
+  companyField      String?   // null when disabled, 'value' when enabled
+  messageField      String?   // null when disabled, 'value' when enabled
+  submitButtonText  String    @default("Submit")
+  thankYouMessage   String    @default("Thank you for your message. I will get back to you soon!")
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+  
+  // Relation to UserTag
+  userTag           UserTag?  @relation(fields: [tagIdNumeric], references: [id], onDelete: Cascade)
+
+  @@unique([tagId])
+  @@index([tagId])
+  @@index([tagIdNumeric])
 }
