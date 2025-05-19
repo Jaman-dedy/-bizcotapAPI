@@ -133,6 +133,34 @@ export class CompaniesController {
     return this.companiesService.create(createCompanyDto);
   }
 
+  @Get(':id/contacts')
+  @ApiOperation({ summary: 'Get all contacts associated with a company' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of contacts associated with the company',
+  })
+  @ApiResponse({ status: 404, description: 'Company not found' })
+  async getCompanyContacts(
+    @Param('id') id: string,
+    @Req() req: AuthenticatedRequest,
+  ) {
+    const company = await this.companiesService.findOne(+id);
+
+    if (
+      req.user.role !== UserRole.SUPER_ADMIN &&
+      !(
+        company.ownerId === req.user.id ||
+        company.employees.some((e) => e.id === req.user.id)
+      )
+    ) {
+      throw new ForbiddenException(
+        'You do not have permission to view this company\'s contacts',
+      );
+    }
+
+    return this.companiesService.findContactsByCompanyId(+id);
+  }
+
   @Get()
   @UseGuards(RolesGuard)
   @Roles(UserRole.SUPER_ADMIN)
