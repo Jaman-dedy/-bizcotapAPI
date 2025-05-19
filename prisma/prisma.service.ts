@@ -74,6 +74,8 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     });
   }
 
+  
+
   async findContactsByCompanyIdRaw(companyId: number) {
     return this.$queryRaw`
       SELECT 

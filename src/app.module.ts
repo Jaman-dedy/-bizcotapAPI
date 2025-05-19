@@ -10,7 +10,8 @@ import { AuthModule } from './auth/auth.module';
 import { JwtAuthGuard } from './auth/guards/jwt-auth.guard';
 import { PrismaModule } from 'prisma/prisma.module';
 import { CompaniesModule } from './companies/companies.module';
-import { InsightsModule } from './insights/insights.module'; // Add this import
+import { InsightsModule } from './insights/insights.module'; 
+import { ContactsModule } from './contacts/contacts.module';
 
 @Module({
   imports: [
@@ -31,7 +32,8 @@ import { InsightsModule } from './insights/insights.module'; // Add this import
     UsersModule,
     AuthModule,
     CompaniesModule,
-    InsightsModule, // Add this module to the imports array
+    InsightsModule,
+    ContactsModule,
   ],
   providers: [
     {

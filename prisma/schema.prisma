@@ -70,6 +70,7 @@ model User {
   exchangedInfos     ExchangedInfo[]
   sentExchanges      ExchangedInfo[]    @relation("SentExchanges")
   userSessions       UserSession[]
+  contacts           Contact[]
 
   @@index([email])
   @@index([role])
@@ -110,6 +111,7 @@ model Company {
   employees          User[]
   userTags           UserTag[]
   tagOrders          TagOrder[]
+  contacts           Contact[]
 
   @@index([ownerId])
 }
@@ -163,6 +165,7 @@ model UserTag {
 
   views     TagView[]
   actions   TagAction[]
+  contacts           Contact[]
 }
 
 // Exchanged contact information (lead capture)
@@ -190,6 +193,9 @@ model ExchangedInfo {
   userId             Int
   sender             User?              @relation("SentExchanges", fields: [senderId], references: [id], onDelete: SetNull)
   senderId           Int?
+
+  // Optional relationship to the Contact record
+  contact            Contact?          
 
   @@index([userTagId])
   @@index([userId])
@@ -288,4 +294,41 @@ model FormConfig {
   @@unique([tagId])
   @@index([tagId])
   @@index([tagIdNumeric])
+}
+
+model Contact {
+  id                 Int       @id @default(autoincrement())
+  firstName          String
+  lastName           String
+  email              String
+  phone              String?
+  jobTitle           String?
+  notes              String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  
+  // GDPR compliance fields
+  consentGiven       Boolean   @default(false)
+  consentTimestamp   DateTime?
+  consentIpAddress   String?
+  dataRetentionDate  DateTime? // When to automatically delete/anonymize data
+  
+  // Flexible ownership - one or both of these can be set
+  user               User?     @relation(fields: [userId], references: [id])
+  userId             Int?      // For individual ownership
+  company            Company?  @relation(fields: [companyId], references: [id])
+  companyId          Int?      // For company ownership
+  
+  // Optional relationship to the tag that generated this contact
+  userTag            UserTag?  @relation(fields: [userTagId], references: [id])
+  userTagId          Int?
+  
+  // Optional relationship to the ExchangedInfo record
+  exchangedInfo      ExchangedInfo? @relation(fields: [exchangedInfoId], references: [id])
+  exchangedInfoId    Int?           @unique // One-to-one relationship
+  
+  @@index([userId])
+  @@index([companyId])
+  @@index([userTagId])
+  @@index([email])
 }
